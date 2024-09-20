@@ -1,0 +1,184 @@
+<!DOCTYPE HTML><html><head><title></title>
+<meta charset="UTF-8"><meta name="viewport"content="width=device-width,initial-scale=1">
+<style>
+ body{background-color:#f7f7f7}
+ #spc{height:20px}
+ table{background-color:#dddddd;border-collapse:collapse;width:auto}
+ tr:nth-child(even){background-color:#ffffff}
+ td,th{border:1px solid #dddddd;text-align:left;padding:8px}
+ th{cursor:pointer;position:sticky;top:0}
+ fieldset{background-color:#f7f7f7}
+ #Bar{width:620px;background-color:grey;margin:auto;display:none}
+ #Progress{width:0.5%;height:30px;background-color:green}
+</style>
+</head>
+<body><center><h2 id=header></h2><div id="spc"></div>
+<form method="POST"action="/upload"enctype="multipart/form-data">
+<select id="fsSel"name="fs"onChange="FMgetFS()"></select>&nbsp;&nbsp;&nbsp;
+Capacity: <span id="capa"></span>&nbsp;&nbsp;&nbsp;
+Used: <span id="used"></span>&nbsp;&nbsp;&nbsp;
+Free: <span id="free"></span>&nbsp;&nbsp;&nbsp;
+<select style="min-width:100"name="dir"id="dir"onChange="FMgetDir()"></select>
+<div id="spc"></div>
+<fieldset><legend>File list</legend>
+<table id="fTable"><tr><th onclick="sort(1)"></th><th style="width:99%"onclick="sort(1)">File</th><th style="min-width:140px"onclick="sort(2)">Changed</th><th style="min-width:75px"onclick="sort(3)">Size</th></tr></table>
+<div id="spc"></div></fieldset>
+<div id="spc"></div>
+<input type="button"value="New Dir"onclick="mkDir()">&nbsp;&nbsp;
+<input type="submit"formaction="/download"formmethod="get"value="Download"onclick="return fileSel()">&nbsp;&nbsp;
+<input type="button"value="Delete"onclick="delFile()">&nbsp;&nbsp;
+<input type="submit"formtarget="dmy"value="Upload"onClick="return valUp()">&nbsp;&nbsp;
+<input type="file"name="data"style="width:400px"id="upfile">
+</form></center>
+<div id="Bar"><div id="Progress"></div></div>
+<iframe name="dmy"id="dmy"style="display:none"></iframe>
+<script>
+var Socket,initialized=false,intervalId,FMgetDirOverride=false;sortDir=3,sortCol=0;
+var upnm,upID,namsel="";
+try{establishWS();}catch(err){alert(err.message);}
+function elID(el){return document.getElementById(el);}
+function establishWS(){
+ try{
+  Socket=new WebSocket("ws://"+window.location.hostname+"/ws");
+  Socket.onopen=function(evt){WSonOpen(evt)};
+  Socket.onclose=function(evt){WSonClose(evt)};
+  Socket.onmessage=function(evt){WSonMsg(evt)};
+  Socket.onerror=function(evt){WSonErr(evt)};
+ }catch(err){alert(err.message);}
+}
+function WSonOpen(evt){if(!initialized){FMgetBasic();initialized=true;}}
+function WSonClose(evt){setTimeout(function(){establishWS();},1000);}
+function WSonMsg(evt){
+ var s=evt.data;
+ if(s[0]=='{'){
+  let msgJ=JSON.parse(evt.data);
+  switch(msgJ.answer){
+  case"FMgetBasic":FMgotBasic(msgJ);break;
+  case"FMgetFS":FMgotFS(msgJ);break;
+  case"FMgetDir":FMgotDir(msgJ);break;
+  case"FMuploadStatus":upStat(msgJ);
+  default:break;
+  }
+ }
+}
+function WSonErr(evt){}
+function sendJSON(obj){try{Socket.send(JSON.stringify(obj)+"\0");}catch(e){alert(e.message);}}
+function FMgetBasic(){sendJSON({request:"FMgetBasic"});}
+function FMgotBasic(msgJ){
+ if(msgJ.hostname>""){
+  document.title=msgJ.hostname+" File Manager";
+  elID("header").innerHTML=document.title;
+ }
+ var sel=elID("fsSel");
+ while(sel.options.length){sel.remove(0);}
+ for(var i=0;i<msgJ.filesys.length;i++){
+  var option=document.createElement("option");
+  option.text=msgJ.filesys[i];
+  sel.add(option);
+ }
+ FMgetFS();
+}
+function FMgetFS(){sendJSON({request:"FMgetFS",filesys:elID("fsSel").value});}
+function FMgotFS(msgJ){
+ elID("capa").innerHTML=msgJ.capacity;
+ elID("used").innerHTML=msgJ.used;
+ elID("free").innerHTML=msgJ.free;
+ FMgetDir();
+}
+function getPath(){
+ var dir=elID("dir"),val=dir.value;
+ if(val==".."){val=dir.options[0].value;val=val.substring(0,val.lastIndexOf("/"));}
+ if(val==""){val="/";}
+ return val;
+}
+function FMgetDir(){if(!FMgetDirOverride){sendJSON({request:"FMgetDir",filesys:elID("fsSel").value,dir:getPath()});}}
+function FMgotDir(msgJ){
+ FMgetDirOverride=true;
+ var dir=elID("dir"),fTable=elID("fTable");
+ while(dir.options.length){dir.remove(0);}
+ while(fTable.rows.length>1){fTable.deleteRow(1);}
+ var root=document.createElement("option"),i;
+ root.text=msgJ.dir;
+ dir.add(root);
+ for(i=0;i<msgJ.dirs.length;i++){
+  var option=document.createElement("option");
+  option.text=msgJ.dir+msgJ.dirs[i];
+  dir.add(option);
+ }
+ if(msgJ.dir>"/"){var par=document.createElement("option");par.text="..";dir.add(par);}
+ for(i=0;i<msgJ.files.length;i++){var x=msgJ.files[i];addRow(fTable,x.file,x.size,x.bytes,x.date);}
+ FMgetDirOverride=false;
+ if((sortDir==1)||(sortDir==2)){sort(0);}
+}
+function addRow(fTable,f,s,b,d){
+ var i=fTable.rows.length,row=fTable.insertRow(-1),cell0=row.insertCell(0);
+ row.insertCell(1).innerHTML=f;row.insertCell(2).innerHTML=d;
+ var cell3=row.insertCell(3);
+ var inp=document.createElement("input");
+ inp.type="radio";inp.name="fname";inp.value=f;
+ cell0.appendChild(inp);cell0.setAttribute("data-val",fmtHex(i,5));
+ cell3.innerHTML=s;cell3.setAttribute("data-val",fmtHex(parseInt(b),6));
+}
+function fmtHex(i,len){var o=i.toString(16),s='0';while(o.length<len){o+=s;}return o;}
+function sort(n){
+ var t,r,o,i,a,b,swap,desig="";
+ if(n>0){
+  if(n==sortCol){sortDir++;if(sortDir>3)sortDir=1;
+  }else sortDir=1;sortCol=n;
+ }
+ if(sortDir==1)desig="&#x2BC5";if(sortDir==2)desig="&#x2BC6";
+ t=elID("fTable");
+ r=t.rows;
+ r[0].cells[1].innerHTML="File";r[0].cells[2].innerHTML="Changed";r[0].cells[3].innerHTML="Size";
+ if(sortCol>0)r[0].cells[sortCol].innerHTML+=desig;
+ for(o=1;o<(r.length-1);o++){
+  swap=false;
+  for(i=1;i<(r.length-o);i++){
+   if(sortDir==3){a=r[i].cells[0].getAttribute("data-val");b=r[i+1].cells[0].getAttribute("data-val");
+   }else{
+    if(sortCol==1){a=r[i].cells[1].innerHTML.toUpperCase();b=r[i+1].cells[1].innerHTML.toUpperCase();}
+    if(sortCol==2){a=r[i].cells[2].innerHTML;b=r[i+1].cells[2].innerHTML;}
+    if(sortCol==3){a=r[i].cells[3].getAttribute("data-val");b=r[i+1].cells[3].getAttribute("data-val");}
+   }
+   if((!(sortDir==2))&&(a>b)||((sortDir==2)&&(a<b))){r[i].parentNode.insertBefore(r[i+1],r[i]);swap=true;}
+  }
+  if(!swap)break;
+ }
+}
+function fileSel(){
+ var i,fnames=document.getElementsByName("fname");
+ namSel="";
+ for(i=0;i<fnames.length;i++){
+  if(fnames[i].checked){namSel=fnames[i].value;break;}
+ }
+ if(namSel==""){psaf();return false;}
+ return true;
+}
+function psaf(){alert("Please select a file");}
+function delFile(){if(fileSel()){sendJSON({request:"FMdelete",filesys:elID("fsSel").value,dir:elID("dir").value,fname:namSel});}return true;}
+function mkDir(){var dir=prompt("New Directory","");
+ if(!(dir==null||dir==""||dir=="/")){sendJSON({request:"FMmkDir",filesys:elID("fsSel").value,dir:elID("dir").value,dname:dir});}return true;
+}
+function valUp(){
+ var n=elID("upfile").value,d=elID("dir").value;
+ var sz=elID("upfile").files[0].size;
+ if(n==""){psaf();return false;}
+ n=n.replace(/.*[\/\\]/, '');
+ if(d=="/")d="";
+ upnm=elID("fsSel").value+d+"/"+n;
+ sendJSON({request:"FMuploadBegin",path:upnm,size:sz});
+ if(sz>3000){elID("Progress").style.width="0.5%";elID("Bar").style.display="block";}
+ upID=setInterval(pBar,1000);
+ return true;
+}
+function pBar(){sendJSON({request:"FMuploadStatus",path:upnm});}
+function upStat(msgJ){
+ elID("Progress").style.width=msgJ.percent+"%";
+ if(msgJ.status=="4"){
+  clearInterval(upID);
+  sendJSON({request:"FMuploadEnd",path:upnm});
+  elID("Bar").style.display="none";
+  FMgetDir();
+ }
+}
+</script></body></html>

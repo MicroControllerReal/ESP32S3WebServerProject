@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en"class=js-focus-visible>
+<title>Webserver Configuration</title>
+<style>
+.category{font-weight:bold;font-size:32px;text-align:left;}
+tr{font-size:25px;}
+</style>
+<body style="color:#000000;background-color:#FFFFFF";font-family:'Verdana','Arial',sans-serif;">
+ <p id="Heading"style="margin:0;padding:0;font-size:40px;font-weight:bold">Webserver Configuration</p>
+ <main>
+  <div style="border-radius:10px !important;">
+   <table style="width:100%">
+    <tr><th width=20%></th><th width=80%></th></tr>
+    <tr><td class="category"colspan="2">Host</td></tr>
+    <tr><td>Host Name</td><td><input type="text"id="Host"data-rule="L,4,32;FM,Msg,Host Name: Length 4-32;EE;PM,Msg"onchange="validate(this)"></td></tr>
+    <tr><td>Broadcast AP</td><td><input type="checkbox"id="Broadcast"></td></tr>
+    <tr><td>AP Password</td><td><input type="password"id="APPassword"data-rule="L,8,16;FM,Msg,AP Password: Length of 8-16;EE;P,3;FM,Msg,AP Password: Insufficient;EE;PM,Msg"onchange="validate(this)"></td></tr>
+    <tr><td class="category"colspan="2">WiFi</td></tr>
+    <tr><td>WiFi Name</td><td><input type="text"id="WiFiSSID"></td></tr>
+    <tr><td>WiFi Password</td><td><input type="password"id="WiFiPassword"></td></tr>
+    <tr><td class="category"colspan="2">Admin</td></tr>
+    <tr><td>Admin Name</td><td><input type="text"id="Admin"data-rule="L,6,16;FM,Msg,Admin Name: Length of 6-16;EE;PM,Msg"onchange="validate(this)"></td></tr>
+    <tr><td>Admin Password</td><td><input type="password"id="AdminPwd"data-rule="L,8,16;FM,Msg,Admin Password: Length of 8-16;EE;P,3;FM,Msg,Admin Password: Insufficient;EE;PM,Msg"onchange="validate(this)"></td></tr>
+  </table>
+  <br><button class=button onclick="saveData()">Save Config</button>
+  <br><p id="Msg"style="margin:0;padding:0;color:#FF0000;font-size:15px"></p><br>
+  <p style="margin:0;padding:0">Changing configuration will cause the server to reboot</p><br>
+  <table style="width:100%">
+   <tr><th width=20%></th><th width=80%></th></tr>
+   <tr><td class="category"colspan="2">Date / Time</td></tr>
+   <tr><td>Timezone</td><td><input style="min-width:400px"type="text"id="Timezone"data-rule="L,4,50;FM,Msg2,Timezone: Invalid;EE;PM,Msg2"onChange="validate(this)"></td></tr>
+   <tr><td>Time Server</td><td><input type="text"id="Timeserver"data-rule="L,8,35;FM,Msg2,Time Server: Invalid;EE;PM,Msg2"onChange="validate(this)"></td></tr>
+   <tr><td>Date/Time (yyyymmddhhmmss)</td><td><input type="text"id="DateTime"data-rule="N;L,14;FM,Msg2,Date/Time: Invalid;EE;PM,Msg2"onChange="validate(this)"></td></tr>
+  </table>
+  <button class=button onclick="setDateTime()">Set Date/Time</button>
+  <br><p id="Msg2"style="margin:0;padding:0;color:#FF0000;font-size:15px"></p><br>
+  </div>
+ </main>
+<script>
+try{
+var Socket,initialized=false;
+pgInit();
+}catch(err){alert(err.message);}
+function pgInit(){
+ try{
+  Socket=new WebSocket("ws://"+window.location.hostname+"/ws");
+  Socket.onopen=function(evt){WSonOpen(evt)};
+  Socket.onclose=function(evt){WSonClose(evt)};
+  Socket.onmessage=function(evt){WSonMessage(evt)};
+  Socket.onerror=function(evt){WSonError(evt)};
+ }
+ catch(err){document.getElementById("Msg").innerHTML=err.message;}
+ document.getElementById("Host").focus();
+}
+function WSonOpen(evt){
+ if(!initialized){
+  WSdoSend("getHostSettings");
+  WSdoSend("getDateTime");
+  initialized=true;
+ }
+}
+function WSonClose(evt){}
+function WSonMessage(evt){
+ var s=evt.data,tl=s.split("\n");
+ switch(tl[0]){
+ case "setHostSettings":
+  if(tl.length==8){
+   document.getElementById("Host").value=tl[1];
+   document.getElementById("Broadcast").checked=tl[2]=="1";
+   document.getElementById("APPassword").value=tl[3];
+   document.getElementById("WiFiSSID").value=tl[4];
+   document.getElementById("WiFiPassword").value=tl[5];
+   document.getElementById("Admin").value=tl[6];
+   document.getElementById("AdminPwd").value=tl[7];
+   if(tl[1]!=""){
+    document.title=tl[1]+" Configuration";
+    document.getElementById("Heading").innerHTML=document.title;
+   }
+  }
+  break;
+ case "setDateTime":
+  if(tl.length==5){
+   document.getElementById("Timezone").value=tl[1];
+   document.getElementById("Timeserver").value=tl[2];
+   document.getElementById("DateTime").value=tl[3];
+  }
+  break;
+ case "Message":
+  document.getElementById("Msg").innerHTML=s.substring(8);
+  break;
+ case "Message2":
+  document.getElementById("Msg2").innerHTML=s.substring(8);
+  break;
+ default:break;
+ }
+}
+function WSonError(evt){}
+function WSdoSend(msg){
+ try{Socket.send(msg);}
+ catch(err){document.getElementById("Messages").innerHTML=err.message;}
+}
+function validateAll(group){
+ var pass=true,doVal=false;
+ const ruleItems=document.querySelectorAll('[data-rule]');
+ ruleItems.forEach((userItem)=>{
+  doVal=false;
+  switch(userItem.id){
+   case"Timezone":case"TimeServer":case"DateTime":
+    doVal=group==2;
+    break;
+   default:
+    doVal=group==1;
+    break;
+  }
+  if(doVal){
+   if(!validate(userItem)){
+    pass=fail;
+    exit;
+   }
+  }
+ });
+ return pass;
+}
+function saveData(){
+ if(validateAll(1)){
+  var s="setHostSettings\n";
+  s+=document.getElementById("Host").value+"\n";
+  if(document.getElementById("Broadcast").checked)
+   {s+="1\n";}
+  else
+   {s+="0\n";}
+  s+=document.getElementById("APPassword").value+"\n";
+  s+=document.getElementById("WiFiSSID").value+"\n";
+  s+=document.getElementById("WiFiPassword").value+"\n";
+  s+=document.getElementById("Admin").value+"\n";
+  s+=document.getElementById("AdminPwd").value+"\n\0";
+  WSdoSend(s);
+ }
+}
+function setDateTime(){
+ if(validateAll(2)){
+  var s="setDateTime\n";
+  s+=document.getElementById("TimeZone").value+"\n";
+  s+=document.getElementById("TimeServer").value+"\n";
+  s+=document.getElementById("DateTime").value+"\n\0";
+  WSdoSend(s);
+ }
+}
+function validate(obj){
+ try{
+  var val=obj.value,rule=obj.getAttribute("data-rule"),rules=rule.split(";"),ruleset,i=0, pass=true,msg="";
+  for(i=0;i<rules.length;i++){
+   ruleset=rules[i].split(",");
+   switch(ruleset[0]){
+   case"A"://Only Alpha characters allowed
+    pass=pass && allAlpha(val,ruleset.length>1 ? ruleset[1]:"");
+    break;
+   case"N"://Only Numeric characters allowed
+    pass=pass && allNumeric(val,ruleset.length>1 ? ruleset[1]:"");
+    break;
+   case"AN"://Only AlphaNumeric characters allowed
+    pass=pass && allAlphaNumeric(val,ruleset.length>1 ? ruleset[1]:"");
+    break;
+   case"UC"://Convert value to upper case
+    val=toLocaleUpperCase(val);
+    break;
+   case "LC"://Convert value to lower case
+    val=toLocaleLowerCase(val);
+    break;
+   case"L"://Length limits
+    if(ruleset.length>1)pass=pass&&val.length>=ruleset[1];
+    if(ruleset.length>2)pass=pass&&val.length<=ruleset[2];
+    break;
+   case"R"://Required entry
+    pass=pass&&val.length>0;
+    break;
+   case"P"://Password strength test
+    if(ruleset.length>=1)pass=pass && testPwd(val,ruleset[1]);
+    break;
+   case"PM":case"FM"://Pass/Fail message
+    if((ruleset[0]=="FM"&&(!pass))||(ruleset[0]=="PM"&&pass)){
+     if(ruleset.length>=2){
+      var s="",m=ruleset.length>=3 ? ruleset[2]:"";
+      if(ruleset.length>=4)
+       s="color:"+ruleset[3];
+      if(ruleset.length>=5)s+="background-color:"+ruleset[4];
+      try{
+       if(ruleset[1]=="!"){alert(m);}else{
+        var elem=document.getElementById(ruleset[1]);
+        elem.innerHTML=m;
+        if(s>"")elem.style=s;}
+      }catch(err){}
+     }
+    }
+    break;
+   case"EE"://Early exit if pass==false
+    if(!pass)i=rules.length+1;
+    break;
+   }
+  }
+ }
+ catch(err){document.getElementById("Messages").innerHTML = err.message;}
+ return pass;
+}
+function allAlpha(val,extras){
+ var i,c;
+ for(i=0;i<val.length;i++){
+  c=val.charAt(i);
+  if(!((c>="A"&&c<="Z")||(c>="a"&&c<="z")||extras.includes(c)))
+   return false;
+ }
+ return true;
+}
+function allNumeric(val,extras){
+ var i,c;
+ for(i=0;i<val.length;i++){
+  c=val.charAt(i);
+  if(!((c>="0"&&c<="9")||extras.includes(c)))
+  return false;
+ }
+ return true;
+}
+function allAlphaNumeric(val,extras){
+ var i,c;
+ for(i=0;i<val.length;i++){
+  c=val.charAt(i);
+  if(!((c>="A"&&c<="Z")||(c>="a"&&c<="z")||(c>="0"&&c<="9")||extras.includes(c)))
+  return false;
+ }
+ return true;
+}
+function testPwd(val,p){
+ var n=0,a=0,B=0,c=0,s='',i;
+ for(i=0;i<val.length;i++){
+  s=val.charAt(i);
+  if(isNaN(s)){
+   if((s>="A"&&s<="Z")||(s>="a"&&s<="z")){
+    if(s==s.toUpperCase()){B=1;}else 
+    if(s==s.toLowerCase()){a=1;}
+   }else c=1;
+  }else{n=1;}
+ }return(a+B+c+n)>=p;
+}
+</script>
+</html>

@@ -1,0 +1,29 @@
+#######################################
+# Syntax Coloring Map
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1) Red Bold
+#######################################
+
+SerialWS	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2) Red
+#######################################
+begin	KEYWORD2
+end	KEYWORD2
+available	KEYWORD2
+awaitingSend	KEYWORD2
+availableForWrite	KEYWORD2
+peek	KEYWORD2
+read	KEYWORD2
+send	KEYWORD2
+flush	KEYWORD2
+flushRecv	KEYWORD2
+flushSend	KEYWORD2
+write	KEYWORD2
+
+######################################
+# Constants (LITERAL1)
+#######################################

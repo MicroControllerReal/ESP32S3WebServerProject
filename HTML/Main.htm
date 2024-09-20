@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en"class=js-focus-visible>
+<head>
+<title></title>
+<style type="text/css">html,body{height:100%;margin:0;}#wrapper{min-height:100%;}</style>
+</head>
+<body style="color:#000000;background-color:#FFFFFF";font-family:'Verdana','Arial',sans-serif;">
+<div style="display:table;height:100%;width:100%;">
+  <div style="display:table-cell;vertical-align:middle;text-align:center;">
+   <h1 id="dat" style=font-size:24pt;>01/01/2023</h2>
+   <h1 id="tim" style=font-size:48pt;>00:00</p>
+  </div>
+</div>
+<script>
+var Socket,initialized=false,intervalId;
+try{
+  establishWS();
+}catch(err){alert(err.message);}
+
+// (re)establish web socket connection
+function establishWS(){
+ try{
+  Socket=new WebSocket("ws://"+window.location.hostname+"/ws");
+  Socket.onopen=function(evt){WSonOpen(evt)};
+  Socket.onclose=function(evt){WSonClose(evt)};
+  Socket.onmessage=function(evt){WSonMessage(evt)};
+  Socket.onerror=function(evt){WSonError(evt)};
+ }
+ catch(err){
+  alert(err.message);
+ }
+}
+
+// WsOnOpen will be called when a websocket connection is opened
+function WSonOpen(evt){
+ if(!initialized){
+  requestNewDateTime(true);
+  // Create an interval timer to call requestNewDateTime every second
+  intervalId=setInterval(function(){requestNewDateTime(true);},1000);
+  initialized=true;
+ }
+}
+
+// WsonClose will be called when a websocket connection is closed
+function WSonClose(evt){
+  setTimeout(function(){establishWS();},1000);  // Set a timer to reestablish connection in 1 second
+}
+
+// WSonMessage will be called whenever a web socket message is received from the server
+function WSonMessage(evt){
+ var s = evt.data, tl;
+ if(s[0]=='{'){
+   let msgJ = JSON.parse(evt.data);
+   tl = [msgJ.answer,msgJ.timezone,msgJ.ntpserver,msgJ.time,msgJ.comment];
+ }else{
+  tl = s.split("\n");  // ESP32Webserver sends messages as text lines, delimited by "\n". Split the text into a string array
+ }
+ switch(tl[0]){  // Switch based on the first line of text (the "name" or "identifier" of the message)
+ case "setDateTime":
+  if(tl.length>=4){  // A correctly formatted message would have 4 lines of text
+   // Date/time format is yyyymmddhhmiss
+   document.getElementById("dat").innerHTML=tl[3].substring(6, 4)+'/'+tl[3].substring(8, 6)+'/'+tl[3].substring(0, 4);
+   document.getElementById("tim").innerHTML=tl[3].substring(10, 8)+':'+tl[3].substring(12, 10)+':'+ tl[3].substring(14, 12);
+  }
+  break;
+ default:break;
+ }
+}
+
+// WSonError will be called whenever a web socket error occurs
+function WSonError(evt){}
+
+// WSdoSend is called to send a web socket message to the server
+function WSdoSend(msg){
+ try{Socket.send(msg);}
+ catch(err){alert(err.message);}
+}
+
+// function requestNewDateTime will be called periodically to get a new date/time from the server
+function requestNewDateTime(json){
+ if(json){WSdoSend("{'request':'getDateTime'}");}
+ else    {WSdoSend("getDateTime");}
+}
+</script>
+</body>
+</html>

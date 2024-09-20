@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><style>textarea{resize:none;font-family:"Courier";font-size:14pt;}</style>
+<head><title>WiFiSerial Serial Web Monitor</title></head>
+<body onresize="rsz()">
+<textarea id="serialOut"title="Text to send"></textarea><br>
+<input type="button"onClick="sendSerial()"value="Send"></input>&nbsp;&nbsp;&nbsp; 
+Multiline<input type="checkbox"id="multiline"onchange="rsz()"></input>&nbsp;&nbsp;&nbsp; 
+Show Send History<input type="checkbox"id="showHistory"onchange="rsz()"></input>&nbsp;&nbsp;&nbsp;  
+<select id="ending"onchange="setfocus()"><option value="0">No line ending</option><option value="1">Newline</option>
+<option value="2">Carriage return</option><option value="3">Both CR & NL</option></select>
+<div id="historical">
+ <textarea id="history"readonly></textarea>
+ Autoscroll<input type="checkbox"id="sendLock"onchange="setfocus()"checked></input>
+ <input type="button"onClick="cls(1)"value="Clear Send History"></input>
+</div>
+<textarea id="serialIn"readonly></textarea><br>
+Autoscroll<input type="checkbox"id="recvLock"onchange="setfocus()"checked></input>
+<input type="button"onClick="cls(2)"value="Clear Receive History"></input>
+<script>
+var Socket,initialized=false,intervalId,ends=["","\n","\r","\r\n"];
+establishWS();
+function elID(el){return document.getElementById(el);}
+function establishWS(){try{
+ Socket=new WebSocket("ws://"+window.location.hostname+"/SerialWS");
+ Socket.onopen=function(evt){WSonOpen(evt)};
+ Socket.onclose=function(evt){WSonClose(evt)};
+ Socket.onmessage=function(evt){WSonMsg(evt)};
+ Socket.onerror=function(evt){WSonErr(evt)};
+ }catch(err){alert(err.message);}
+}
+function WSonOpen(evt){if(!initialized){initialized=true;}}
+function WSonClose(evt){setTimeout(function(){establishWS();},1000);}
+function WSonMsg(evt){appendText(evt.data,elID("serialIn"),elID("recvLock"));}
+function WSonErr(evt){}
+function rsz(){
+ var o,h=window.innerHeight-120,w=window.innerWidth-30;
+ o=elID("serialOut");
+ o.style.width=w+"px";
+ if(elID("multiline").checked){
+  h-=90;
+  o.style.height="120px";
+ }else{
+  o.style.height="30px";
+ }
+ o.focus();
+ o=elID("history");
+ o.style.width=w+"px";
+ if(elID("showHistory").checked){
+  elID("historical").style.display="block";
+  h=(h-32)/2;
+ }else{
+  elID("historical").style.display="none";
+ }
+ o.style.width=w+"px";
+ o.style.height=h+"px";
+ o=elID("serialIn");
+ o.style.width=w+"px";
+ o.style.height=h+"px";
+}
+function sendSerial(){
+ var o=elID("serialOut"),e=parseInt(elID("ending").value);
+ var txt=o.value+ends[e];
+ Socket.send(txt);
+ appendText(txt,elID("history"),elID("sendLock"));
+ o.value="";
+ o.focus();
+}
+function setfocus(){elID("serialOut").focus();}
+function appendText(t,tb,sl){
+ tb.innerHTML+=t;
+ if(sl.checked){tb.scrollTo(tb.scrollWidth,tb.scrollHeight);}
+}
+function cls(a){
+ var ta;
+ if(a==1){ta=elID("history");}
+ if(a==2){ta=elID("serialIn");}
+ ta.value="";
+}
+rsz();
+</script>
+</body>
+</html>
