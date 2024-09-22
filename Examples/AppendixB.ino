@@ -1,0 +1,156 @@
+// Appendix B – Sample Customization For A Water Detection Alarm
+// Customize the webserver for your project using this portion of the webserver sketch
+
+
+// ------------------------- Library section -------------------------
+// Libraries
+// Put any libraries necessary for your customizations here
+
+
+
+// ------------------------- Global section -------------------------
+// Global
+// Put any global variables, #defines, structure definitions, etc.
+// necessary for your customization here
+#define waterDetect 39  // NOTE: Attach an external 10K resistor to pull this pin to 3.3V!
+#define waterAlarm  40
+bool volatile waterDetected  = false; // Variables used in ISR must be volatile!
+bool alarmOn = false;      //Var to track alarm. Global because in several routines
+
+
+
+// ------------------------- ISR section -------------------------
+// Interrupt service routines
+// Put any ISR necessary for your customization here
+void IRAM_ATTR ISR_water(){waterDetected = true;}
+
+
+// ------------------------- Setup section -------------------------
+// Setup
+// Put any additional setup requirements for your customization here
+void customEarlySetup(){
+// customEarlySetup will be called before most of the server resources are
+// made available. Use customEarlySetup for things that may need to be done
+// more or less immediately upon boot, such as ensuring that a buzzer is not
+// on or blanking a display (maybe display a flash screen)
+  pinMode(waterAlarm, OUTPUT);
+  digitalWrite(waterAlarm, LOW);
+}
+
+
+void customLateSetup(){
+// customLateSetup will be called after all of the basic webserver setup is
+// complete which means that things like local time, the SD card, Telegram,
+// etc. would already be initialized and available within your customization
+  // NOTE: Attach an external 10K resistor to pull this pin to 3.3V!
+  pinMode(waterDetect, INPUT);
+  // ISR_water will be called when waterDetect starts to go low
+  attachInterrupt(waterDetect,ISR_water, FALLING);
+}
+
+
+
+// ------------------------- Webpage section -------------------------
+void customPages(){
+// Custom web pages
+// Put any custom pages required for your customization here
+// customPages() will be called during webserver setup
+// Some pages may require no setup at all as they may be picked up by the standard server.serveStatic routine if they are in the location defined for stdFiles
+// (though the full name would be required. Like "/sensors.htm").
+// Only add them here if you are getting page not found errors when accessing your pages
+  // Register the webpage "/water"
+  server.on("/water", HTTP_GET, [](AsyncWebServerRequest *request){
+    char alarmTxt[100];
+    if(alarmOn || waterDetected){
+      // Text will be an "X" symbol + "Water Detected!"
+      strcpy(alarmTxt, "&#x274C; Water Detected!");}
+    else {
+      // Text will be a checkmark + "No Water Detected"
+      strcpy(alarmTxt, "&#x2713; No Water Detected");}
+    AsyncWebServerResponse *response =
+      request->beginResponse(200, "text/html", alarmTxt);
+    request->send(response);
+  });
+}
+
+
+
+// ------------------------- Status section -------------------------
+void customServerStatus(char stat[]){
+// Use customServerStatus to add any messages to the server status that
+// may be required. Remember to end messages with a newline ("\n").
+// Note, the standard status set by the server is usually less than
+// 300 characters long. The status may NEVER be more than 999 characters
+// long so keep that in mind when creating your own messages!
+
+}
+
+
+
+// ------------------------- Loop section -------------------------
+bool customLoop(bool didOne){
+// Put any additional programming to be executed within the loop of the
+// webserver here. For example, you may take sensor readings, send Telegram
+// alerts, etc.
+// customLoop will be called each pass through the loop
+// Where possible, do not execute your own code if the parameter didOne is true
+// in order to prevent slowing down the loop. (didOne true means a process required by
+// the basic web server has been performed so some CPU time within the loop is already used)
+// Be sure to set the customDidOne to true if you process any of your own procedures
+// that should prevent other routines within the main loop from processing in the
+// same iteration of the loop.
+// The customLoop will be called AFTER higher priority processing within the webserver loop
+// (such as handling OTA, clients, polling for Telegram messages, etc.) but before handling lower priorities
+// (such as time synchronization)
+
+  static unsigned long lastDisplay = -15000;  // last display update
+  bool customDidOne = false;      // Set to true if any custom processing is done.
+
+  // REALLY high priority custom routines should always be processed
+  // Put such processing prior to if(didOne || customDidOne)
+
+  if(alarmOn                         // Alarm is on
+  && (!digitalRead(waterDetect))){   // but water is no longer there
+    digitalWrite(waterAlarm, LOW);   // Turn piezo buzzer OFF
+    waterDetected = false;           // Reset waterDetected so we see it next time
+    alarmOn = false;                 // Remember that the alarm is OFF
+    customDidOne = true;             // We did some processing
+  } else if((!alarmOn)               // Alarm is not on
+  && waterDetect){                   // but water was detected by the interrupt
+    digitalWrite(waterAlarm, HIGH);  // Turn piezo buzzer ON
+    alarmOn = true;                  // Remember that the alarm is ON
+    customDidOne = true;             // We did some processing
+  }
+    
+  if(didOne || customDidOne)         // The rest of this is no priority
+    return customDidOne;             // So get out of here
+    
+  return customDidOne;      // Let WebServer know if we did a process
+}
+
+
+
+// ------------------------- Websocket section -------------------------
+void customWS_EVT(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+// Put responses to custom web socket requests here
+// customWS_EVT will be called when a websocket data request is received that is NOT
+// handled by the standard webserver processes themselves.
+// For further details on the parameters, see the documentation for the ESP Asynchronous Web Server library
+// For samples of handling messages, see the documentation
+}
+
+#if ((UseTelegram == TelegramSend) || (UseTelegram == TelegramReceive) || (UseTelegram == TelegramSendReceive))
+// ------------------------- Telegram section -------------------------
+bool customTelegramRcvd(int botNum, UniversalTelegramBot bot, struct telegramMessage tMsg){
+// Put handling of received Telegram Messages here. Be sure to set UseTelegram in customize.h to enable receiving Telegram messages!
+// botNum is the index of the receiving bot in Bots
+// bot is the bot itself
+  bool msgHandled = false;
+  switch(botNum){                         // Depending on which bot received the message
+    case 0:                               // If it was bot 0
+      break;
+  }
+  return msgHandled;
+}
+
+#endif
