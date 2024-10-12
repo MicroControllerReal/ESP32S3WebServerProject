@@ -1,0 +1,3 @@
+Errata: The admin.htm file was erroneously named Admin.htm (capital A) during the upload. Mea culpa.
+Upper/lower case matters in filenames. Please Change Admin.htm to admin.htm before uploading to the
+ESP32S3 Webserver.
