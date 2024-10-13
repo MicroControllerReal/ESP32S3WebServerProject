@@ -98,6 +98,8 @@ bool customLoop(bool didOne){
 // (such as handling OTA, clients, polling for Telegram messages, etc.) but before handling lower priorities
 // (such as time synchronization)
 
+bool customDidOne = false;
+  
   // REALLY high priority custom routines should always be processed
   // Put such processing prior to if(didOne || customDidOne)
 
