@@ -887,7 +887,7 @@ void getDateTimeSettings(char rsvp[], bool json){
   }else {
     strcpy(pattern, "setDateTime\n%s\n%s\n%s\n%s");
   }
-  getLocalTime(&currentTime);
+  getLocalTime(&currentTime,NULL);
   char dttms[20];
   sprintf(dttms,"%04i%02i%02i%02i%02i%02i",
     currentTime.tm_year + 1900,
@@ -896,7 +896,7 @@ void getDateTimeSettings(char rsvp[], bool json){
     currentTime.tm_hour,
     currentTime.tm_min,
     currentTime.tm_sec);
-  sprintf(rsvp,pattern,timezone,ntpserver,dttms, WiFi.status() != WL_CONNECTED ? "\nNo WiFi, time cannot synch" : "");
+  sprintf(rsvp,pattern,timezone,ntpserver,dttms, WiFi.status() != WL_CONNECTED ? "No WiFi, time cannot synch" : "");
 }
 
 // Handle changing host settings as specified by client in /admin.htm
